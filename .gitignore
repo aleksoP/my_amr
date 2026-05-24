@@ -1,6 +1,4 @@
-
-
 #Basic build folders
-build/
-install/
-log/
+build
+install
+log
