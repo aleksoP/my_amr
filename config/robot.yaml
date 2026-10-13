@@ -1,0 +1,14 @@
+# Induvidual robot configuration file. This file is used to configure the robot's identity, model, and any overrides for specific settings.
+
+schema_version: 1
+
+identity:
+  robot_id: amr-0001
+  display_name: "AMR 0001"
+  serial_number: "SN0001"
+
+model:
+  id: AMR-100
+  revision: A
+
+overrides: {}

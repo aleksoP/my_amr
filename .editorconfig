@@ -1,0 +1,36 @@
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# C and C++: ROS 2 convention
+[*.{c,cc,cpp,cxx,h,hh,hpp,hxx}]
+indent_size = 2
+tab_width = 2
+
+# Python
+[*.py]
+indent_size = 4
+tab_width = 4
+
+# ROS configuration and launch-related files
+[*.{yaml,yml,xml}]
+indent_size = 2
+tab_width = 2
+
+# CMake
+[CMakeLists.txt]
+indent_size = 2
+tab_width = 2
+
+[*.cmake]
+indent_size = 2
+tab_width = 2
+
+# Markdown sometimes intentionally uses trailing spaces
+[*.md]
+trim_trailing_whitespace = false

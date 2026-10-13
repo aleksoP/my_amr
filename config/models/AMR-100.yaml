@@ -1,0 +1,39 @@
+# This is the configuration file for the AMR-100 robot model. It defines the robot's mechanical, electrical, and sensor specifications, as well as its capabilities and operational limits. 
+
+schema_version: 1
+
+model:
+  id: AMR-100
+  revision: A
+
+mechanical:
+  length_m: 0.80
+  width_m: 0.60
+  height_m: 0.30
+  payload_kg: 100
+
+drivetrain:
+  type: differential
+  wheel_radius_m: 0.10
+  track_width_m: 0.45
+
+electrical:
+  nominal_voltage_v: 24
+
+sensors:
+  lidar:
+    model: TBD
+  imu:
+    model: WT61
+
+hardware:
+  motor_controller:
+    model: ZLAC8015D
+
+capabilities:
+  - autonomous_navigation
+  - docking
+
+limits:
+  max_linear_velocity_mps: 1.0
+  max_angular_velocity_rps: 1.2
