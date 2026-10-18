@@ -29,22 +29,16 @@ robot_bringup.launch.py
 
 ## Responsibilies
 
--- platform
+-- platform (replacable with simulation)
 
 Motor driver / motor node
 MCU serial communication
 IMU driver
 LiDAR driver
 Camera drivers
-Battery / BMS node
-Tray / actuator nodes
-Wheel odometry
 IMU filter / robot_localization EKF
-robot_state_publisher
 static_transform_publishers
 Safety monitor
-Diagnostics / health monitoring
-cmd_vel mux / safety velocity limiter
 
 -- autonomy
 
