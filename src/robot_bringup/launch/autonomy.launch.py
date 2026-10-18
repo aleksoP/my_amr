@@ -7,30 +7,14 @@ from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 
 def generate_launch_description():
 
-  lidar_launch = IncludeLaunchDescription(
-    PythonLaunchDescriptionSource(
-      os.path.join(lidar_pkg, 'launch', 'lidar.launch.py')
-    ),
-  )
+    navigation_pkg = get_package_share_directory('robot_navigation')
 
-  camera_launch = IncludeLaunchDescription(
-    PythonLaunchDescriptionSource(
-      os.path.join(camera_pkg, 'launch', 'camera.launch.py')
-    ),
-  )
+    navigation_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+        os.path.join(navigation_pkg, 'launch', 'navigation.launch.py')
+        ),
+    )
 
-  mcu_launch = IncludeLaunchDescription(
-    PythonLaunchDescriptionSource(
-      os.path.join(mcu_pkg, 'launch', 'mcu.launch.py')
-    ),
-  )
-
-
-  return LaunchDescription([
-    description_launch,
-    motor_launch,
-    imu_launch,
-    lidar_launch,
-    camera_launch,
-    mcu_launch,
-  ])
+    return LaunchDescription([
+        navigation_launch,
+    ])
