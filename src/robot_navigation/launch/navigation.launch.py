@@ -11,7 +11,7 @@ from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument, IncludeLaunchDescription
 from launch.launch_description_sources import PythonLaunchDescriptionSource
-from launch.substitutions import LaunchConfiguration
+from launch.substitutions import IfElseSubstitution, LaunchConfiguration
 
 
 def generate_launch_description():
@@ -24,13 +24,20 @@ def generate_launch_description():
     launch_arguments = {
         'namespace': LaunchConfiguration('namespace'),
         'use_namespace': LaunchConfiguration('use_namespace'),
-        'slam': LaunchConfiguration('slam'),
+
+        'slam': IfElseSubstitution(
+            LaunchConfiguration('slam'), if_value='True', else_value='False'
+        ),
         'map': LaunchConfiguration('map'),
-        'use_localization': LaunchConfiguration('use_localization'),
+        'use_localization': IfElseSubstitution(
+            LaunchConfiguration('use_localization'), if_value='True', else_value='False'
+        ),
         'use_sim_time': LaunchConfiguration('use_sim_time'),
         'params_file': LaunchConfiguration('params_file'),
         'autostart': LaunchConfiguration('autostart'),
-        'use_composition': LaunchConfiguration('use_composition'),
+        'use_composition': IfElseSubstitution(
+            LaunchConfiguration('use_composition'), if_value='True', else_value='False'
+        ),
         'use_respawn': LaunchConfiguration('use_respawn'),
         'log_level': LaunchConfiguration('log_level'),
     }
