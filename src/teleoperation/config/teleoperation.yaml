@@ -1,6 +1,24 @@
-teleoperation:
-  ros_parameters:
+# Parameters are read at node startup. Restart the node after changes.
+keyboard_input:
+  ros__parameters:
+    # Empty: discover all local keyboards at startup. Or specify one event path.
+    device: ""
 
-    joy_config: "xbox"
-    joy_dev: "/dev/input/js0"
-    cmd_vel_topic: "/cmd_vel"
+    # Full-scale requested speeds; the manager independently enforces its limits.
+    max_linear: 0.50        # m/s, forward
+    max_reverse: 0.30       # m/s, reverse
+    max_angular: 0.80       # rad/s
+
+    # Fraction of the full-scale speeds. +/- changes this by one step.
+    initial_speed_scale: 0.20  # 20%; valid range 0.0 to 1.0
+    speed_scale_step: 0.10     # 10%; valid range greater than 0.0 to 1.0
+
+teleoperation_manager:
+  ros__parameters:
+    # Stop publishing a nonzero command when keyboard input is older than this.
+    command_timeout: 0.25  # seconds; output timer can add up to 0.05 s
+
+    # Independent maximum permitted speeds.
+    max_linear: 0.50       # m/s, forward
+    max_reverse: 0.30      # m/s, reverse
+    max_angular: 0.80      # rad/s

@@ -1,8 +1,7 @@
 """Launch the complete Nav2 stack for this robot.
 
-This file deliberately delegates node creation and lifecycle management to
-``nav2_bringup``.  Keeping it as a thin wrapper lets this package own its
-robot-specific defaults without maintaining a fork of Nav2's launch files.
+This wrapper uses adapted Jazzy bringup launch files to route velocity through
+the shared command mux before smoothing and collision monitoring.
 """
 
 import os
@@ -16,7 +15,6 @@ from launch.substitutions import IfElseSubstitution, LaunchConfiguration
 
 def generate_launch_description():
     robot_navigation_dir = get_package_share_directory('robot_navigation')
-    nav2_bringup_dir = get_package_share_directory('nav2_bringup')
     default_params_file = os.path.join(
         robot_navigation_dir, 'config', 'nav2.yaml'
     )
@@ -87,7 +85,7 @@ def generate_launch_description():
         ),
         IncludeLaunchDescription(
             PythonLaunchDescriptionSource(
-                os.path.join(nav2_bringup_dir, 'launch', 'bringup_launch.py')
+                os.path.join(robot_navigation_dir, 'launch', 'bringup_mux.launch.py')
             ),
             launch_arguments=launch_arguments.items(),
         ),

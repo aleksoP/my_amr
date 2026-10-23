@@ -1,8 +1,8 @@
 # Robot Navigation
 
 `robot_navigation` owns the robot-facing navigation configuration and the
-single Nav2 entry point. It wraps Nav2's supported Jazzy bringup launch rather
-than maintaining a fork of Nav2's individual node launches.
+Nav2 entry point. It uses adapted Nav2 Jazzy bringup and navigation launch
+files to route velocity commands through the shared mux.
 
 ## Package layout
 
@@ -12,10 +12,16 @@ robot_navigation/
 │   ├── nav2.yaml          # Complete upstream Nav2 Jazzy default parameters
 │   └── ekf.yaml           # robot_localization EKF template: wheel odometry + IMU
 └── launch/
-    └── navigation.launch.py
+    ├── navigation.launch.py
+    ├── bringup_mux.launch.py
+    └── navigation_mux.launch.py
 ```
 
 ## Starting the navigation stack
+
+The velocity smoother receives `/cmd_vel_mux`, so navigation alone does not
+provide its command input; start the mux through `robot_bringup` autonomy for
+the complete prototype path.
 
 Build and source the workspace, then start Nav2 with the map to localize
 against:
@@ -61,7 +67,8 @@ debugging.
 
 ### `config/nav2.yaml`
 
-This is the full, unchanged default parameter file supplied by Nav2 Jazzy. It
+This is based on the Nav2 Jazzy default parameter file, with stamped velocity
+commands enabled for the motion pipeline. It
 contains the parameters for AMCL, map server, planners, controller, costmaps,
 behavior server, BT navigator, collision monitor, docking, and related Nav2
 processes. It is a baseline, not a tuned robot configuration.

@@ -1,0 +1,13 @@
+# Prototype arbitration only: there is no operating-mode selection yet.
+twist_mux:
+  ros__parameters:
+    use_stamped: true
+    topics:
+      teleoperation:
+        topic: /cmd_vel_teleop
+        timeout: 0.5
+        priority: 20
+      navigation:
+        topic: /cmd_vel_nav
+        timeout: 0.5
+        priority: 10
