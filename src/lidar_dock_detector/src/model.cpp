@@ -40,7 +40,8 @@ std::vector<Eigen::Vector2d> buildVerticesFromArrays(
   const std::vector<double> & vertices_y)
 {
   if (vertices_x.size() != vertices_y.size()) {
-    throw std::runtime_error("landmark.vertices_x and landmark.vertices_y must have the same length");
+    throw std::runtime_error(
+          "landmark.vertices_x and landmark.vertices_y must have the same length");
   }
   if (vertices_x.size() < 2U) {
     throw std::runtime_error("landmark.vertices_x/y must define at least two vertices");
@@ -179,7 +180,8 @@ LandmarkModel buildLandmarkModel(const LandmarkConfig & config)
   model.vertices = canonicalizeVertices(raw_vertices, config);
   model.segment_lengths = computeSegmentLengths(model.vertices);
   model.turn_angles_rad = computeTurnAngles(model.vertices);
-  model.total_length = std::accumulate(model.segment_lengths.begin(), model.segment_lengths.end(), 0.0);
+  model.total_length = std::accumulate(model.segment_lengths.begin(), model.segment_lengths.end(),
+      0.0);
   model.samples = buildModelSamples(model.vertices, config.sample_spacing);
   return model;
 }

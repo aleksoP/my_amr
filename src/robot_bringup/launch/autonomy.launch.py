@@ -13,6 +13,7 @@ from launch_ros.actions import Node
 def generate_launch_description():
     navigation_pkg = get_package_share_directory("robot_navigation")
     bringup_pkg = get_package_share_directory("robot_bringup")
+    dock_detector_pkg = get_package_share_directory("lidar_dock_detector")
 
     map_arg = DeclareLaunchArgument(
         "map",
@@ -27,6 +28,16 @@ def generate_launch_description():
             "map": LaunchConfiguration("map"),
         }.items(),
     )
+    dock_detector_launch = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(
+            os.path.join(
+                dock_detector_pkg, "launch", "lidar_dock_detector.launch.py"
+            )
+        ),
+        launch_arguments={
+            "use_sim_time": LaunchConfiguration("use_sim_time", default="false"),
+        }.items(),
+    )
     motion_mux = Node(
         package="twist_mux",
         executable="twist_mux",
@@ -38,4 +49,6 @@ def generate_launch_description():
         remappings=[("cmd_vel_out", "/cmd_vel_mux")],
         output="screen",
     )
-    return LaunchDescription([map_arg, navigation_launch, motion_mux])
+    return LaunchDescription(
+        [map_arg, navigation_launch, dock_detector_launch, motion_mux]
+    )

@@ -15,11 +15,15 @@ struct TopicConfig
   std::string scan_topic {"scan"};
   std::string pose_topic {"/detected_dock_pose"};
   std::string pose_frame {""};
+  std::string tracking_frame {""};
+  std::string raw_marker_pose_topic {"/dock_detector/raw_marker_pose"};
+  std::string raw_dock_pose_topic {"/dock_detector/raw_dock_pose"};
   std::string confidence_topic {"/dock_detector/confidence"};
   std::string state_topic {"/dock_detector/state"};
   std::string marker_topic {"/dock_detector/debug_markers"};
   std::string output_frame {"base_link"};
   std::string marker_frame {"dock_marker"};
+  std::string dock_frame {"dock_contact"};
 };
 
 struct ServiceConfig
@@ -98,6 +102,10 @@ struct TemporalConfig
 {
   int required_consecutive_detections {3};
   int max_missed_frames {3};
+  double acquisition_timeout_sec {0.50};
+  double stale_timeout_sec {0.25};
+  double lost_timeout_sec {0.75};
+  double scan_timeout_sec {0.75};
   double max_position_jump {0.10};
   double max_yaw_jump_rad {0.35};
   double smoothing_alpha_position {0.35};
@@ -126,6 +134,7 @@ struct DetectorConfig
   bool enabled_on_startup {false};
   bool publish_debug_markers {true};
   bool log_pipeline_debug {false};
+  bool publish_tf {false};
 };
 
 DetectorConfig loadDetectorConfig(rclcpp::Node & node);

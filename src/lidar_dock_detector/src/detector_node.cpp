@@ -18,6 +18,7 @@
 #include <tf2_ros/transform_listener.h>
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <iomanip>
 #include <limits>
@@ -73,13 +74,8 @@ double candidateSelectionScore(
   const double distance_penalty = tracking_active ? 0.35 : 0.20;
   const double yaw_penalty = tracking_active ? 0.35 : 0.25;
   return candidate.confidence -
-    distance_penalty * normalized_distance -
-    yaw_penalty * normalized_yaw;
-}
-
-std::string poseFrame(const DetectorConfig & config)
-{
-  return config.topics.pose_frame.empty() ? config.topics.output_frame : config.topics.pose_frame;
+         distance_penalty * normalized_distance -
+         yaw_penalty * normalized_yaw;
 }
 
 double yawFromQuaternion(const geometry_msgs::msg::Quaternion & q)
@@ -274,10 +270,7 @@ public:
     line_extractor_(config_.line_extraction),
     landmark_matcher_(config_),
     pose_estimator_(config_),
-    detection_filter_(
-      config_.temporal,
-      config_.initial_estimate.use_initial_estimate ? std::optional<Pose2D>(config_.initial_estimate.pose) :
-      std::nullopt),
+    detection_filter_(config_.temporal, std::nullopt),
     publisher_(*this, config_),
     tf_buffer_(this->get_clock()),
     tf_listener_(tf_buffer_)
@@ -291,58 +284,36 @@ public:
 
     start_service_ = create_service<std_srvs::srv::Trigger>(
       config_.services.start_service,
-      std::bind(&DockDetectorNode::handleStart, this, std::placeholders::_1, std::placeholders::_2));
+      std::bind(&DockDetectorNode::handleStart, this, std::placeholders::_1,
+        std::placeholders::_2));
     stop_service_ = create_service<std_srvs::srv::Trigger>(
       config_.services.stop_service,
       std::bind(&DockDetectorNode::handleStop, this, std::placeholders::_1, std::placeholders::_2));
     toggle_service_ = create_service<std_srvs::srv::Trigger>(
       config_.services.toggle_service,
-      std::bind(&DockDetectorNode::handleToggle, this, std::placeholders::_1, std::placeholders::_2));
+      std::bind(&DockDetectorNode::handleToggle, this, std::placeholders::_1,
+        std::placeholders::_2));
+    watchdog_timer_ = create_wall_timer(
+      std::chrono::milliseconds(50),
+      [this]() {
+        if (detection_filter_.state() == DetectionState::kIdle) {return;}
+        const auto output =
+        detection_filter_.watchdog(DetectionFilter::MonotonicTime::clock::now());
+        if (output.state == DetectionState::kLost) {
+          publisher_.publish(timeToMsg(now()), output, DetectionDebugFrame {});
+        }
+      });
 
     FilterOutput startup_state;
-    startup_state.state = config_.enabled_on_startup ? DetectionState::kSearching : DetectionState::kIdle;
+    startup_state.state =
+      config_.enabled_on_startup ? DetectionState::kSearching : DetectionState::kIdle;
     publisher_.publish(timeToMsg(now()), startup_state, DetectionDebugFrame {});
   }
 
 private:
-  std::optional<Pose2D> poseForPoseTopic(
-    const FilterOutput & output,
-    const builtin_interfaces::msg::Time & stamp)
-  {
-    if (!output.publish_pose) {
-      return std::nullopt;
-    }
-
-    const std::string target_frame = poseFrame(config_);
-    if (target_frame == config_.topics.output_frame) {
-      return output.dock_pose;
-    }
-
-    if (output.fresh_pose) {
-      try {
-        const auto transform = tf_buffer_.lookupTransform(
-          target_frame,
-          config_.topics.output_frame,
-          rclcpp::Time(stamp),
-          rclcpp::Duration::from_seconds(0.05));
-        last_pose_topic_pose_ = transformPose(output.dock_pose, transform);
-      } catch (const tf2::TransformException & ex) {
-        RCLCPP_WARN_THROTTLE(
-          get_logger(),
-          *get_clock(),
-          2000,
-          "Skipping dock pose update: transform %s <- %s unavailable: %s",
-          target_frame.c_str(),
-          config_.topics.output_frame.c_str(),
-          ex.what());
-      }
-    }
-
-    return last_pose_topic_pose_;
-  }
-
   void scanCallback(const sensor_msgs::msg::LaserScan::SharedPtr scan)
   {
+    const auto monotonic_now = DetectionFilter::MonotonicTime::clock::now();
     DetectionDebugFrame debug_frame;
 
     if (detection_filter_.state() == DetectionState::kIdle) {
@@ -368,13 +339,28 @@ private:
         config_.topics.output_frame.c_str(),
         scan->header.frame_id.c_str(),
         ex.what());
-      FilterOutput output = detection_filter_.update(std::nullopt);
+      FilterOutput output = detection_filter_.update(std::nullopt, monotonic_now);
       publisher_.publish(scan->header.stamp, output, debug_frame);
       return;
     }
 
     debug_frame.roi_points = scan_processor_.process(*scan, transform);
     debug_frame.regions = region_splitter_.split(debug_frame.roi_points);
+
+    std::optional<Pose2D> geometry_prior;
+    if (detection_filter_.hasTrackedPose()) {
+      try {
+        const auto tracking_to_output = tf_buffer_.lookupTransform(
+          config_.topics.output_frame, config_.topics.tracking_frame,
+            rclcpp::Time(scan->header.stamp),
+          rclcpp::Duration::from_seconds(0.05));
+        geometry_prior = transformPose(*detection_filter_.predictedDockPose(), tracking_to_output);
+      } catch (const tf2::TransformException &) {
+        // Keep perception running without a tracking gate; the tracking update below remains blocked.
+      }
+    } else if (config_.initial_estimate.use_initial_estimate) {
+      geometry_prior = config_.initial_estimate.pose;
+    }
 
     std::optional<CandidateDebug> best_candidate;
     double best_candidate_score = -1.0;
@@ -422,7 +408,7 @@ private:
         << ",line_detail=" << summarizeLines(extraction.lines)
         << "}";
 
-      const std::optional<Pose2D> prior_pose = detection_filter_.predictedDockPose();
+      const std::optional<Pose2D> prior_pose = geometry_prior;
       int evaluated_region_candidates = 0;
       for (const auto & match : matches) {
         if (evaluated_region_candidates >= config_.matching.max_candidates_per_region) {
@@ -463,39 +449,60 @@ private:
     }
 
     debug_frame.accepted_candidate = best_candidate;
-    FilterOutput output = detection_filter_.update(best_candidate);
+    std::optional<DockMeasurement> raw_measurement;
+    std::optional<DockMeasurement> tracking_measurement;
+    if (best_candidate.has_value()) {
+      DockMeasurement raw;
+      raw.marker_pose = best_candidate->marker_pose;
+      raw.dock_pose = best_candidate->dock_pose;
+      raw.stamp = scan->header.stamp;
+      raw.frame_id = config_.topics.output_frame;
+      raw.score = best_candidate->score;
+      raw.confidence = best_candidate->confidence;
+      raw.alignment_error = best_candidate->alignment_error;
+      raw.correspondence_ratio = best_candidate->correspondence_ratio;
+      raw.model_coverage_ratio = best_candidate->model_coverage_ratio;
+      raw.valid = best_candidate->accepted;
+      raw_measurement = raw;
+      try {
+        const auto transform_to_tracking = tf_buffer_.lookupTransform(
+          config_.topics.tracking_frame, config_.topics.output_frame,
+            rclcpp::Time(scan->header.stamp),
+          rclcpp::Duration::from_seconds(0.05));
+        DockMeasurement tracked = raw;
+        tracked.marker_pose = transformPose(raw.marker_pose, transform_to_tracking);
+        tracked.dock_pose = transformPose(raw.dock_pose, transform_to_tracking);
+        tracked.frame_id = config_.topics.tracking_frame;
+        tracking_measurement = tracked;
+      } catch (const tf2::TransformException & ex) {
+        RCLCPP_WARN_THROTTLE(get_logger(), *get_clock(), 2000,
+          "Raw dock measurement retained but tracker update skipped: transform %s <- %s unavailable: %s",
+          config_.topics.tracking_frame.c_str(), config_.topics.output_frame.c_str(), ex.what());
+      }
+    }
+    FilterOutput output = detection_filter_.update(tracking_measurement, monotonic_now);
     if (config_.log_pipeline_debug) {
       const char * accepted = best_candidate.has_value() ? "yes" : "no";
       const double confidence = best_candidate.has_value() ? best_candidate->confidence : 0.0;
       const std::optional<Pose2D> prior_pose = detection_filter_.predictedDockPose();
       const std::string roi_bounds = formatBounds(boundsOfPoints(debug_frame.roi_points));
-      const std::string prior_summary = prior_pose.has_value() ? summarizePose(*prior_pose) : "none";
+      const std::string prior_summary =
+        prior_pose.has_value() ? summarizePose(*prior_pose) : "none";
       const std::string best_summary = summarizeCandidate(best_candidate);
       const std::string matcher_summary = summarizeLandmarkDebug(landmark_debug);
       const std::string reason_summary = summarizeReasons(rejection_reasons);
       const std::string region_summary_text = region_summary.str();
-      // RCLCPP_INFO_THROTTLE(
-      //   get_logger(),
-      //   *get_clock(),
-      //   1000,
-      //   "dock pipeline: roi=%zu roi_bounds=%s regions=%zu lines=%zu matches=%d eval=%d accepted=%s conf=%.2f state=%s prior={%s} best={%s} matcher={%s} reasons=%s region_detail=[%s]",
-      //   debug_frame.roi_points.size(),
-      //   roi_bounds.c_str(),
-      //   debug_frame.regions.size(),
-      //   debug_frame.fitted_lines.size(),
-      //   generated_matches,
-      //   evaluated_candidates,
-      //   accepted,
-      //   confidence,
-      //   stateName(output.state),
-      //   prior_summary.c_str(),
-      //   best_summary.c_str(),
-      //   matcher_summary.c_str(),
-      //   reason_summary.c_str(),
-      //   region_summary_text.c_str());
+      RCLCPP_INFO_THROTTLE(
+        get_logger(), *get_clock(), 1000,
+        "dock pipeline: roi=%zu roi_bounds=%s regions=%zu lines=%zu matches=%d eval=%d accepted=%s conf=%.2f state=%s prior={%s} best={%s} matcher={%s} reasons=%s region_detail=[%s]",
+        debug_frame.roi_points.size(), roi_bounds.c_str(), debug_frame.regions.size(),
+        debug_frame.fitted_lines.size(), generated_matches, evaluated_candidates, accepted,
+          confidence,
+        stateName(output.state), prior_summary.c_str(), best_summary.c_str(),
+          matcher_summary.c_str(),
+        reason_summary.c_str(), region_summary_text.c_str());
     }
-    const auto pose_topic_pose = poseForPoseTopic(output, scan->header.stamp);
-    publisher_.publish(scan->header.stamp, output, debug_frame, pose_topic_pose);
+    publisher_.publish(scan->header.stamp, output, debug_frame, raw_measurement);
   }
 
   bool detectionActive() const
@@ -507,7 +514,6 @@ private:
   {
     detection_filter_.setEnabled(true);
     detection_filter_.reset();
-    last_pose_topic_pose_.reset();
 
     FilterOutput output;
     output.state = DetectionState::kSearching;
@@ -517,7 +523,6 @@ private:
   void stopDetection()
   {
     detection_filter_.setEnabled(false);
-    last_pose_topic_pose_.reset();
 
     FilterOutput output;
     output.state = DetectionState::kIdle;
@@ -526,7 +531,7 @@ private:
   }
 
   void handleStart(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>/*request*/,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response)
   {
     startDetection();
@@ -536,7 +541,7 @@ private:
   }
 
   void handleStop(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>/*request*/,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response)
   {
     stopDetection();
@@ -546,7 +551,7 @@ private:
   }
 
   void handleToggle(
-    const std::shared_ptr<std_srvs::srv::Trigger::Request> /*request*/,
+    const std::shared_ptr<std_srvs::srv::Trigger::Request>/*request*/,
     std::shared_ptr<std_srvs::srv::Trigger::Response> response)
   {
     if (detectionActive()) {
@@ -569,13 +574,13 @@ private:
   PoseEstimator pose_estimator_;
   DetectionFilter detection_filter_;
   Nav2PosePublisher publisher_;
-  std::optional<Pose2D> last_pose_topic_pose_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
   rclcpp::Subscription<sensor_msgs::msg::LaserScan>::SharedPtr scan_subscriber_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr start_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr stop_service_;
   rclcpp::Service<std_srvs::srv::Trigger>::SharedPtr toggle_service_;
+  rclcpp::TimerBase::SharedPtr watchdog_timer_;
 };
 
 }  // namespace lidar_dock_detector

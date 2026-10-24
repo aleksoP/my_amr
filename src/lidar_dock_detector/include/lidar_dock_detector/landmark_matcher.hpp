@@ -16,7 +16,9 @@ class LandmarkMatcher
 public:
   explicit LandmarkMatcher(const DetectorConfig & config);
 
-  std::vector<MatchCandidate> match(const Region & region, const std::vector<LineSegment> & lines) const;
+  std::vector<MatchCandidate> match(
+    const Region & region,
+    const std::vector<LineSegment> & lines) const;
   std::vector<MatchCandidate> match(
     const Region & region,
     const std::vector<LineSegment> & lines,
@@ -34,7 +36,8 @@ private:
     const std::vector<LineSegment> & ordered_lines,
     int model_start_index,
     LandmarkMatchDebug * debug) const;
-  std::vector<Eigen::Vector2d> buildObservedVertices(const std::vector<LineSegment> & ordered_lines) const;
+  std::vector<Eigen::Vector2d> buildObservedVertices(
+    const std::vector<LineSegment> & ordered_lines) const;
   std::vector<LineSegment> reverseLines(const std::vector<LineSegment> & lines) const;
 
   LandmarkModel model_;

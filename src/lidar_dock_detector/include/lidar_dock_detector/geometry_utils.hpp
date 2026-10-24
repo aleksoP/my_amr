@@ -79,12 +79,16 @@ inline Eigen::Vector2d rotate(const Eigen::Vector2d & vector, const double yaw)
   return Eigen::Vector2d(c * vector.x() - s * vector.y(), s * vector.x() + c * vector.y());
 }
 
-inline Eigen::Vector2d applyTransform(const RigidTransform2D & transform, const Eigen::Vector2d & point)
+inline Eigen::Vector2d applyTransform(
+  const RigidTransform2D & transform,
+  const Eigen::Vector2d & point)
 {
   return transform.rotation * point + transform.translation;
 }
 
-inline Pose2D transformToPose(const RigidTransform2D & transform, const Eigen::Vector2d & origin = Eigen::Vector2d::Zero())
+inline Pose2D transformToPose(
+  const RigidTransform2D & transform,
+  const Eigen::Vector2d & origin = Eigen::Vector2d::Zero())
 {
   const Eigen::Vector2d translated_origin = applyTransform(transform, origin);
   Pose2D pose;
@@ -118,12 +122,15 @@ inline Pose2D composePose(const Pose2D & base, const Pose2D & offset)
   return composed;
 }
 
-inline Pose2D lowPassPose(const Pose2D & current, const Pose2D & measurement, const double alpha_pos, const double alpha_yaw)
+inline Pose2D lowPassPose(
+  const Pose2D & current, const Pose2D & measurement,
+  const double alpha_pos, const double alpha_yaw)
 {
   Pose2D filtered = current;
   filtered.x = current.x + alpha_pos * (measurement.x - current.x);
   filtered.y = current.y + alpha_pos * (measurement.y - current.y);
-  filtered.yaw = normalizeAngle(current.yaw + alpha_yaw * shortestAngularDistance(current.yaw, measurement.yaw));
+  filtered.yaw = normalizeAngle(current.yaw + alpha_yaw * shortestAngularDistance(current.yaw,
+      measurement.yaw));
   filtered.valid = measurement.valid;
   return filtered;
 }

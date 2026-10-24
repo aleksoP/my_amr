@@ -28,21 +28,23 @@ geometry_msgs::msg::Quaternion yawToQuaternion(const double yaw)
   return msg;
 }
 
-std::string poseFrame(const DetectorConfig & config)
-{
-  return config.topics.pose_frame.empty() ? config.topics.output_frame : config.topics.pose_frame;
-}
-
 }  // namespace
 
 Nav2PosePublisher::Nav2PosePublisher(rclcpp::Node & node, const DetectorConfig & config)
 : config_(config),
   model_(buildLandmarkModel(config.landmark))
 {
-  pose_publisher_ = node.create_publisher<geometry_msgs::msg::PoseStamped>(config_.topics.pose_topic, 10);
-  confidence_publisher_ = node.create_publisher<std_msgs::msg::Float32>(config_.topics.confidence_topic, 10);
+  pose_publisher_ =
+    node.create_publisher<geometry_msgs::msg::PoseStamped>(config_.topics.pose_topic, 10);
+  raw_marker_pose_publisher_ = node.create_publisher<geometry_msgs::msg::PoseStamped>(
+    config_.topics.raw_marker_pose_topic, 10);
+  raw_dock_pose_publisher_ = node.create_publisher<geometry_msgs::msg::PoseStamped>(
+    config_.topics.raw_dock_pose_topic, 10);
+  confidence_publisher_ =
+    node.create_publisher<std_msgs::msg::Float32>(config_.topics.confidence_topic, 10);
   state_publisher_ = node.create_publisher<std_msgs::msg::String>(config_.topics.state_topic, 10);
-  marker_publisher_ = node.create_publisher<visualization_msgs::msg::MarkerArray>(config_.topics.marker_topic, 10);
+  marker_publisher_ =
+    node.create_publisher<visualization_msgs::msg::MarkerArray>(config_.topics.marker_topic, 10);
   transform_broadcaster_ = std::make_unique<tf2_ros::TransformBroadcaster>(node);
 }
 
@@ -50,7 +52,7 @@ void Nav2PosePublisher::publish(
   const builtin_interfaces::msg::Time & stamp,
   const FilterOutput & filter_output,
   const DetectionDebugFrame & debug_frame,
-  const std::optional<Pose2D> & pose_topic_pose)
+  const std::optional<DockMeasurement> & raw_measurement)
 {
   std_msgs::msg::Float32 confidence_msg;
   confidence_msg.data = static_cast<float>(filter_output.confidence);
@@ -60,14 +62,17 @@ void Nav2PosePublisher::publish(
   state_msg.data = stateToString(filter_output.state);
   state_publisher_->publish(state_msg);
 
-  if (filter_output.publish_pose) {
-    if (pose_topic_pose.has_value()) {
-      publishPose(stamp, *pose_topic_pose);
-      publishMarkerTransform(stamp, *pose_topic_pose, poseFrame(config_));
-    } else if (poseFrame(config_) == config_.topics.output_frame) {
-      publishPose(stamp, filter_output.dock_pose);
-      publishMarkerTransform(stamp, filter_output.dock_pose, config_.topics.output_frame);
-    }
+  if (raw_measurement.has_value() && raw_measurement->valid) {
+    publishPose(raw_marker_pose_publisher_, raw_measurement->stamp, raw_measurement->marker_pose,
+      raw_measurement->frame_id);
+    publishPose(raw_dock_pose_publisher_, raw_measurement->stamp, raw_measurement->dock_pose,
+      raw_measurement->frame_id);
+    publishRawTransforms(*raw_measurement);
+  }
+  // Nav2 compatibility output is emitted only for a fresh tracked measurement.
+  if (filter_output.fresh_measurement && filter_output.usable) {
+    publishPose(pose_publisher_, filter_output.last_measurement_stamp, filter_output.dock_pose,
+      config_.topics.tracking_frame);
   }
 
   if (!config_.publish_debug_markers) {
@@ -135,7 +140,7 @@ void Nav2PosePublisher::publish(
         0.1, 0.9, 0.9, 0.20));
   }
 
-  if (filter_output.publish_pose) {
+  if (filter_output.has_estimate && config_.topics.tracking_frame == config_.topics.output_frame) {
     marker_array.markers.push_back(makeLineListMarker(
         marker_id++, "filtered_model_lines", stamp,
         transformedModelLines(filter_output.marker_pose),
@@ -146,7 +151,8 @@ void Nav2PosePublisher::publish(
         marker_id++, "marker_frame", stamp, filter_output.marker_pose, 0.1, 0.7, 1.0, 0.20));
 
     std::ostringstream text;
-    text << stateToString(filter_output.state) << " " << static_cast<int>(filter_output.confidence * 100.0) << "%";
+    text << stateToString(filter_output.state) << " " <<
+      static_cast<int>(filter_output.confidence * 100.0) << "%";
     marker_array.markers.push_back(makeTextMarker(
         marker_id++, "detector_state", stamp, filter_output.dock_pose, text.str()));
   }
@@ -317,35 +323,43 @@ std::vector<LineSegment> Nav2PosePublisher::transformedModelLines(const Pose2D &
   return lines;
 }
 
-void Nav2PosePublisher::publishPose(const builtin_interfaces::msg::Time & stamp, const Pose2D & pose) const
+void Nav2PosePublisher::publishPose(
+  const rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr & publisher,
+  const builtin_interfaces::msg::Time & stamp, const Pose2D & pose,
+  const std::string & frame_id) const
 {
   geometry_msgs::msg::PoseStamped pose_msg;
-  pose_msg.header.frame_id = poseFrame(config_);
+  pose_msg.header.frame_id = frame_id;
   pose_msg.header.stamp = stamp;
   pose_msg.pose.position.x = pose.x;
   pose_msg.pose.position.y = pose.y;
   pose_msg.pose.orientation = yawToQuaternion(pose.yaw);
-  pose_publisher_->publish(pose_msg);
+  publisher->publish(pose_msg);
 }
 
-void Nav2PosePublisher::publishMarkerTransform(
-  const builtin_interfaces::msg::Time & stamp,
-  const Pose2D & pose,
-  const std::string & frame_id) const
+void Nav2PosePublisher::publishRawTransforms(const DockMeasurement & measurement) const
 {
-  if (!pose.valid || config_.topics.marker_frame.empty()) {
+  if (!config_.publish_tf || !measurement.valid || config_.topics.marker_frame.empty()) {
     return;
   }
 
   geometry_msgs::msg::TransformStamped transform;
-  transform.header.frame_id = frame_id;
-  transform.header.stamp = stamp;
+  transform.header.frame_id = measurement.frame_id;
+  transform.header.stamp = measurement.stamp;
   transform.child_frame_id = config_.topics.marker_frame;
-  transform.transform.translation.x = pose.x;
-  transform.transform.translation.y = pose.y;
+  transform.transform.translation.x = measurement.marker_pose.x;
+  transform.transform.translation.y = measurement.marker_pose.y;
   transform.transform.translation.z = 0.0;
-  transform.transform.rotation = yawToQuaternion(pose.yaw);
+  transform.transform.rotation = yawToQuaternion(measurement.marker_pose.yaw);
   transform_broadcaster_->sendTransform(transform);
+  if (!config_.topics.dock_frame.empty()) {
+    transform.header.frame_id = config_.topics.marker_frame;
+    transform.child_frame_id = config_.topics.dock_frame;
+    transform.transform.translation.x = config_.landmark.marker_to_dock_offset.x;
+    transform.transform.translation.y = config_.landmark.marker_to_dock_offset.y;
+    transform.transform.rotation = yawToQuaternion(config_.landmark.marker_to_dock_offset.yaw);
+    transform_broadcaster_->sendTransform(transform);
+  }
 }
 
 std::string Nav2PosePublisher::stateToString(const DetectionState state)

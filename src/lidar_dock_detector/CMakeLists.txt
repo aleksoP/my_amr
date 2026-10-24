@@ -61,10 +61,28 @@ install(DIRECTORY launch config
 )
 
 if(BUILD_TESTING)
+  find_package(ament_cmake_gtest REQUIRED)
   find_package(ament_lint_auto REQUIRED)
   set(ament_cmake_copyright_FOUND TRUE)
   set(ament_cmake_cpplint_FOUND TRUE)
   ament_lint_auto_find_test_dependencies()
+  ament_add_gtest(test_detection_filter
+    test/test_detection_filter.cpp
+    src/detection_filter.cpp
+  )
+  if(TARGET test_detection_filter)
+    target_link_libraries(test_detection_filter Eigen3::Eigen)
+    ament_target_dependencies(test_detection_filter rclcpp)
+  endif()
+  ament_add_gtest(test_config_validation
+    test/test_config_validation.cpp
+    src/config.cpp
+    src/model.cpp
+  )
+  if(TARGET test_config_validation)
+    target_link_libraries(test_config_validation Eigen3::Eigen)
+    ament_target_dependencies(test_config_validation rclcpp)
+  endif()
 endif()
 
 ament_package()

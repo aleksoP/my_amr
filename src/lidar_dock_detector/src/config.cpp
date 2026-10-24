@@ -1,6 +1,7 @@
 #include "lidar_dock_detector/config.hpp"
 
 #include "lidar_dock_detector/geometry_utils.hpp"
+#include "lidar_dock_detector/model.hpp"
 
 #include <algorithm>
 #include <cmath>
@@ -29,19 +30,30 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
   config.topics.scan_topic = declareParam(node, "scan_topic", config.topics.scan_topic);
   config.topics.pose_topic = declareParam(node, "pose_topic", config.topics.pose_topic);
   config.topics.pose_frame = declareParam(node, "pose_frame", config.topics.pose_frame);
-  config.topics.confidence_topic = declareParam(node, "confidence_topic", config.topics.confidence_topic);
+  config.topics.tracking_frame = declareParam(node, "tracking_frame", config.topics.pose_frame);
+  config.topics.raw_marker_pose_topic = declareParam(
+    node, "raw_marker_pose_topic", config.topics.raw_marker_pose_topic);
+  config.topics.raw_dock_pose_topic = declareParam(
+    node, "raw_dock_pose_topic", config.topics.raw_dock_pose_topic);
+  config.topics.confidence_topic = declareParam(node, "confidence_topic",
+      config.topics.confidence_topic);
   config.topics.state_topic = declareParam(node, "state_topic", config.topics.state_topic);
   config.topics.marker_topic = declareParam(node, "marker_topic", config.topics.marker_topic);
   config.topics.output_frame = declareParam(node, "output_frame", config.topics.output_frame);
   config.topics.marker_frame = declareParam(node, "marker_frame", config.topics.marker_frame);
+  config.topics.dock_frame = declareParam(node, "dock_frame", config.topics.dock_frame);
 
-  config.services.start_service = declareParam(node, "services.start", config.services.start_service);
+  config.services.start_service = declareParam(node, "services.start",
+      config.services.start_service);
   config.services.stop_service = declareParam(node, "services.stop", config.services.stop_service);
-  config.services.toggle_service = declareParam(node, "services.toggle", config.services.toggle_service);
+  config.services.toggle_service = declareParam(node, "services.toggle",
+      config.services.toggle_service);
 
   config.enabled_on_startup = declareParam(node, "enabled_on_startup", config.enabled_on_startup);
-  config.publish_debug_markers = declareParam(node, "publish_debug_markers", config.publish_debug_markers);
+  config.publish_debug_markers = declareParam(node, "publish_debug_markers",
+      config.publish_debug_markers);
   config.log_pipeline_debug = declareParam(node, "log_pipeline_debug", config.log_pipeline_debug);
+  config.publish_tf = declareParam(node, "publish_tf", config.publish_tf);
 
   config.roi.min_x = declareParam(node, "roi.min_x", config.roi.min_x);
   config.roi.max_x = declareParam(node, "roi.max_x", config.roi.max_x);
@@ -50,7 +62,8 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
   config.roi.min_range = declareParam(node, "roi.min_range", config.roi.min_range);
   config.roi.max_range = declareParam(node, "roi.max_range", config.roi.max_range);
 
-  config.splitting.point_gap = declareParam(node, "splitting.point_gap", config.splitting.point_gap);
+  config.splitting.point_gap = declareParam(node, "splitting.point_gap",
+      config.splitting.point_gap);
   config.splitting.min_region_points = declareParam(
     node, "splitting.min_region_points", config.splitting.min_region_points);
   config.splitting.min_region_span = declareParam(
@@ -104,8 +117,10 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
     node, "landmark.min_visible_segments", config.landmark.min_visible_segments);
   config.landmark.sample_spacing = declareParam(
     node, "landmark.sample_spacing", config.landmark.sample_spacing);
-  config.landmark.origin_mode = declareParam(node, "landmark.origin_mode", config.landmark.origin_mode);
-  config.landmark.origin_vertex = declareParam(node, "landmark.origin_vertex", config.landmark.origin_vertex);
+  config.landmark.origin_mode = declareParam(node, "landmark.origin_mode",
+      config.landmark.origin_mode);
+  config.landmark.origin_vertex = declareParam(node, "landmark.origin_vertex",
+      config.landmark.origin_vertex);
   config.landmark.forward_axis_rad = degreesToRadians(declareParam(
       node, "landmark.forward_axis_deg", radiansToDegrees(config.landmark.forward_axis_rad)));
   config.landmark.marker_to_dock_offset.x = declareParam(
@@ -127,7 +142,8 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
       node, "matching.tracking_yaw_tolerance_deg",
       radiansToDegrees(config.matching.tracking_yaw_tolerance_rad)));
   config.matching.icp_max_correspondence_distance = declareParam(
-    node, "matching.icp_max_correspondence_distance", config.matching.icp_max_correspondence_distance);
+    node, "matching.icp_max_correspondence_distance",
+      config.matching.icp_max_correspondence_distance);
   config.matching.icp_max_iterations = declareParam(
     node, "matching.icp_max_iterations", config.matching.icp_max_iterations);
   config.matching.max_candidates_per_region = declareParam(
@@ -149,9 +165,18 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
     node, "matching.min_confidence", config.matching.min_confidence);
 
   config.temporal.required_consecutive_detections = declareParam(
-    node, "temporal.required_consecutive_detections", config.temporal.required_consecutive_detections);
+    node, "temporal.required_consecutive_detections",
+      config.temporal.required_consecutive_detections);
   config.temporal.max_missed_frames = declareParam(
     node, "temporal.max_missed_frames", config.temporal.max_missed_frames);
+  config.temporal.acquisition_timeout_sec = declareParam(
+    node, "temporal.acquisition_timeout_sec", config.temporal.acquisition_timeout_sec);
+  config.temporal.stale_timeout_sec = declareParam(
+    node, "temporal.stale_timeout_sec", config.temporal.stale_timeout_sec);
+  config.temporal.lost_timeout_sec = declareParam(
+    node, "temporal.lost_timeout_sec", config.temporal.lost_timeout_sec);
+  config.temporal.scan_timeout_sec = declareParam(
+    node, "temporal.scan_timeout_sec", config.temporal.scan_timeout_sec);
   config.temporal.max_position_jump = declareParam(
     node, "temporal.max_position_jump", config.temporal.max_position_jump);
   config.temporal.max_yaw_jump_rad = degreesToRadians(declareParam(
@@ -168,15 +193,19 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
 
   config.initial_estimate.use_initial_estimate = declareParam(
     node, "initial_estimate.use", config.initial_estimate.use_initial_estimate);
-  config.initial_estimate.pose.x = declareParam(node, "initial_estimate.x", config.initial_estimate.pose.x);
-  config.initial_estimate.pose.y = declareParam(node, "initial_estimate.y", config.initial_estimate.pose.y);
-  config.initial_estimate.pose.yaw = degreesToRadians(declareParam(node, "initial_estimate.yaw_deg", 0.0));
+  config.initial_estimate.pose.x = declareParam(node, "initial_estimate.x",
+      config.initial_estimate.pose.x);
+  config.initial_estimate.pose.y = declareParam(node, "initial_estimate.y",
+      config.initial_estimate.pose.y);
+  config.initial_estimate.pose.yaw = degreesToRadians(declareParam(node, "initial_estimate.yaw_deg",
+      0.0));
   config.initial_estimate.pose.valid = config.initial_estimate.use_initial_estimate;
 
   std::size_t segment_count = 0;
   if (!config.landmark.vertices_x.empty() || !config.landmark.vertices_y.empty()) {
     if (config.landmark.vertices_x.size() != config.landmark.vertices_y.size()) {
-      throw std::runtime_error("landmark.vertices_x and landmark.vertices_y must have the same length");
+      throw std::runtime_error(
+          "landmark.vertices_x and landmark.vertices_y must have the same length");
     }
     if (config.landmark.vertices_x.size() < 2U) {
       throw std::runtime_error("landmark.vertices_x/y must contain at least two vertices");
@@ -195,7 +224,8 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
       throw std::runtime_error("landmark.segment_lengths must not be empty");
     }
     if (config.landmark.turn_angles_rad.size() + 1U != config.landmark.segment_lengths.size()) {
-      throw std::runtime_error("landmark.turn_angles_deg must have segment_lengths.size() - 1 entries");
+      throw std::runtime_error(
+          "landmark.turn_angles_deg must have segment_lengths.size() - 1 entries");
     }
     segment_count = config.landmark.segment_lengths.size();
     if (config.landmark.total_length <= 0.0) {
@@ -204,10 +234,63 @@ DetectorConfig loadDetectorConfig(rclcpp::Node & node)
     }
   }
 
-  config.landmark.min_visible_segments = std::clamp(
-    config.landmark.min_visible_segments,
-    2,
-    static_cast<int>(segment_count));
+  if (config.landmark.min_visible_segments < 2 ||
+    config.landmark.min_visible_segments > static_cast<int>(segment_count))
+  {
+    throw std::runtime_error(
+            "landmark.min_visible_segments must be between 2 and the model segment count");
+  }
+
+  const auto require = [](const bool condition, const std::string & message) {
+      if (!condition) {
+        throw std::runtime_error("Invalid lidar_dock_detector configuration: " + message);
+      }
+    };
+  const auto finite = [](const double value) {return std::isfinite(value);};
+  require(!config.topics.output_frame.empty() && !config.topics.tracking_frame.empty(),
+    "output_frame and tracking_frame must be non-empty");
+  require(config.topics.pose_frame.empty() ||
+      config.topics.pose_frame == config.topics.tracking_frame,
+    "pose_frame must be empty or equal tracking_frame");
+  require(config.roi.min_x < config.roi.max_x && config.roi.min_y < config.roi.max_y &&
+    config.roi.min_range >= 0.0 && config.roi.min_range < config.roi.max_range,
+    "ROI bounds must be ordered and range bounds nonnegative");
+  require(finite(config.roi.min_x) && finite(config.roi.max_x) && finite(config.roi.min_y) &&
+    finite(config.roi.max_y) && finite(config.roi.min_range) && finite(config.roi.max_range),
+      "ROI must be finite");
+  require(config.landmark.sample_spacing > 0.0 && finite(config.landmark.sample_spacing),
+    "landmark.sample_spacing must be finite and positive");
+  require(config.splitting.point_gap >= 0.0 && config.splitting.min_region_points >= 2 &&
+    config.splitting.min_region_span >= 0.0 &&
+      config.splitting.max_region_span >= config.splitting.min_region_span,
+    "invalid region splitting limits");
+  require(config.line_extraction.min_line_points >= 2 &&
+      config.line_extraction.min_line_length >= 0.0 &&
+    config.line_extraction.split_threshold >= 0.0 && config.line_extraction.max_fit_error >= 0.0,
+    "invalid line extraction limits");
+  require(config.matching.icp_max_iterations > 0 && config.matching.max_candidates_per_region > 0 &&
+    config.matching.icp_max_correspondence_distance > 0.0 &&
+      config.matching.max_alignment_error > 0.0,
+    "invalid ICP limits");
+  require(config.matching.min_icp_correspondence_ratio >= 0.0 &&
+      config.matching.min_icp_correspondence_ratio <= 1.0 &&
+    config.matching.min_model_coverage_ratio >= 0.0 &&
+      config.matching.min_model_coverage_ratio <= 1.0 &&
+    config.matching.min_geometric_score >= 0.0 && config.matching.min_geometric_score <= 1.0 &&
+    config.matching.min_confidence >= 0.0 && config.matching.min_confidence <= 1.0,
+    "matching ratios must be in [0, 1]");
+  require(config.temporal.required_consecutive_detections >= 1 &&
+      config.temporal.smoothing_alpha_position >= 0.0 &&
+    config.temporal.smoothing_alpha_position <= 1.0 && config.temporal.smoothing_alpha_yaw >= 0.0 &&
+    config.temporal.smoothing_alpha_yaw <= 1.0 && config.temporal.acquisition_timeout_sec > 0.0 &&
+    config.temporal.stale_timeout_sec > 0.0 &&
+      config.temporal.lost_timeout_sec >= config.temporal.stale_timeout_sec &&
+    config.temporal.scan_timeout_sec > 0.0, "invalid temporal configuration");
+
+  const LandmarkModel model = buildLandmarkModel(config.landmark);
+  require(config.landmark.total_length > 0.0 &&
+    std::abs(config.landmark.total_length - model.total_length) <= 1e-6,
+    "landmark.total_length must equal the configured model length");
 
   return config;
 }

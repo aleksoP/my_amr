@@ -62,10 +62,13 @@ std::vector<MatchCandidate> LandmarkMatcher::match(
     static_cast<int>(lines.size()),
     static_cast<int>(model_.segment_lengths.size()));
 
-  for (int visible_segments = config_.landmark.min_visible_segments; visible_segments <= max_visible;
+  for (int visible_segments =
+    config_.landmark.min_visible_segments; visible_segments <= max_visible;
     ++visible_segments)
   {
-    for (int line_start = 0; line_start + visible_segments <= static_cast<int>(lines.size()); ++line_start) {
+    for (int line_start = 0; line_start + visible_segments <= static_cast<int>(lines.size());
+      ++line_start)
+    {
       std::vector<LineSegment> line_window(
         lines.begin() + line_start,
         lines.begin() + line_start + visible_segments);
@@ -76,7 +79,8 @@ std::vector<MatchCandidate> LandmarkMatcher::match(
             model_start + visible_segments <= static_cast<int>(model_.segment_lengths.size());
             ++model_start)
           {
-            const Evaluation evaluation = evaluateWindow(region, ordered_lines, model_start, &debug);
+            const Evaluation evaluation = evaluateWindow(region, ordered_lines, model_start,
+              &debug);
             if (evaluation.valid) {
               matches.push_back(evaluation.candidate);
             }
@@ -128,7 +132,8 @@ LandmarkMatcher::Evaluation LandmarkMatcher::evaluateWindow(
   if (ordered_lines.size() > 1U) {
     angle_score = 0.0;
     for (std::size_t i = 0; i + 1 < ordered_lines.size(); ++i) {
-      const double observed_turn = signedTurnAngle(ordered_lines[i].direction, ordered_lines[i + 1].direction);
+      const double observed_turn = signedTurnAngle(ordered_lines[i].direction,
+          ordered_lines[i + 1].direction);
       const double expected_turn =
         model_.turn_angles_rad[static_cast<std::size_t>(model_start_index) + i];
       angle_score += normalizedLineScore(

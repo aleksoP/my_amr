@@ -2,6 +2,8 @@
 
 #include <Eigen/Core>
 
+#include <builtin_interfaces/msg/time.hpp>
+
 #include <optional>
 #include <string>
 #include <vector>
@@ -88,6 +90,22 @@ struct CandidateDebug
   std::vector<LineSegment> lines;
 };
 
+// Immutable result of one successful geometric scan evaluation.  It deliberately
+// represents an observation, not a filtered or held track state.
+struct DockMeasurement
+{
+  Pose2D marker_pose;
+  Pose2D dock_pose;
+  builtin_interfaces::msg::Time stamp;
+  std::string frame_id;
+  double score {0.0};
+  double confidence {0.0};
+  double alignment_error {0.0};
+  double correspondence_ratio {0.0};
+  double model_coverage_ratio {0.0};
+  bool valid {false};
+};
+
 enum class DetectionState
 {
   kIdle,
@@ -101,10 +119,13 @@ struct FilterOutput
 {
   DetectionState state {DetectionState::kIdle};
   double confidence {0.0};
-  bool publish_pose {false};
-  bool fresh_pose {false};
+  bool has_estimate {false};
+  bool fresh_measurement {false};
+  bool usable {false};
+  bool stale {false};
   Pose2D marker_pose;
   Pose2D dock_pose;
+  builtin_interfaces::msg::Time last_measurement_stamp;
 };
 
 struct DetectionDebugFrame

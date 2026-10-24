@@ -37,13 +37,17 @@ private:
   };
 
   FitResult fitLine(const std::vector<Point2D> & points, int start_index, int end_index) const;
-  LineSegment buildEndpointSegment(const std::vector<Point2D> & points, int start_index, int end_index) const;
+  LineSegment buildEndpointSegment(
+    const std::vector<Point2D> & points, int start_index,
+    int end_index) const;
   void splitRecursive(
     const std::vector<Point2D> & points,
     int start_index,
     int end_index,
     ExtractionResult & result) const;
-  std::vector<LineSegment> mergeCollinear(const std::vector<Point2D> & points, const std::vector<LineSegment> & lines) const;
+  std::vector<LineSegment> mergeCollinear(
+    const std::vector<Point2D> & points,
+    const std::vector<LineSegment> & lines) const;
   std::vector<Point2D> smoothPoints(const std::vector<Point2D> & points) const;
 
   LineExtractionConfig config_;

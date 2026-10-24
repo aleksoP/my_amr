@@ -23,16 +23,38 @@ LiDAR-only dock pose detector for Nav2 external docking. It replaces the AprilTa
    - `/dock_detector/state`
    - `/dock_detector/debug_markers`
 
+## Measurement and tracking contract
+
+Each accepted scan produces an immutable raw marker and dock-contact measurement in
+`output_frame`, stamped with that scan's original timestamp. These are published on
+`/dock_detector/raw_marker_pose` and `/dock_detector/raw_dock_pose`; they are never
+created from a held track.
+
+The temporal tracker converts fresh measurements to `tracking_frame` (default `odom`)
+at the same scan timestamp. `/detected_dock_pose` is published only for a fresh
+accepted tracked measurement, in `tracking_frame`; an old estimate is never restamped
+as a current observation. Tracking uses strict consecutive acquisition hits within
+`temporal.acquisition_timeout_sec`. `stale_timeout_sec`, `lost_timeout_sec`, and
+`scan_timeout_sec` are startup-only wall-time safeguards; a watchdog reaches `LOST`
+even when scans stop arriving.
+
+`publish_tf` defaults to false because dynamic TF cannot express observation
+validity after the robot moves or tracking is lost. When explicitly enabled,
+`marker_frame` is a fresh raw measurement frame whose
+parent is `output_frame`; `dock_frame` is its calibrated marker-to-contact child.
+Neither dynamic TF is republished from a held track.
+
 ## Services
 
 - `/dock_detector/start`
 - `/dock_detector/stop`
 - `/dock_detector/toggle_detection`
 
-Use `/dock_detector/toggle_detection` for Nav2 docking's
-`detector_service_name` hook. Keep `enabled_on_startup: false` so the first
-Nav2 call starts detection and the second call stops it. The explicit start and
-stop services are still useful for manual testing.
+ROS 2 Jazzy `opennav_docking::SimpleChargingDock` subscribes directly to
+`detected_dock_pose`; it has no detector-service parameter. Run this detector
+while docking is available (`enabled_on_startup: true` in the supplied config),
+or have an explicit mission component call the start/stop services. The services
+remain useful for manual tests and deliberate perception gating.
 
 ## Parameters
 

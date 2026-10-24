@@ -28,7 +28,7 @@ public:
     const builtin_interfaces::msg::Time & stamp,
     const FilterOutput & filter_output,
     const DetectionDebugFrame & debug_frame,
-    const std::optional<Pose2D> & pose_topic_pose = std::nullopt);
+    const std::optional<DockMeasurement> & raw_measurement = std::nullopt);
   void clearDebug(const builtin_interfaces::msg::Time & stamp);
 
 private:
@@ -66,16 +66,18 @@ private:
     const Pose2D & pose,
     const std::string & text) const;
   std::vector<LineSegment> transformedModelLines(const Pose2D & pose) const;
-  void publishPose(const builtin_interfaces::msg::Time & stamp, const Pose2D & pose) const;
-  void publishMarkerTransform(
-    const builtin_interfaces::msg::Time & stamp,
-    const Pose2D & pose,
+  void publishPose(
+    const rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr & publisher,
+    const builtin_interfaces::msg::Time & stamp, const Pose2D & pose,
     const std::string & frame_id) const;
+  void publishRawTransforms(const DockMeasurement & measurement) const;
   static std::string stateToString(DetectionState state);
 
   DetectorConfig config_;
   LandmarkModel model_;
   rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr pose_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr raw_marker_pose_publisher_;
+  rclcpp::Publisher<geometry_msgs::msg::PoseStamped>::SharedPtr raw_dock_pose_publisher_;
   rclcpp::Publisher<std_msgs::msg::Float32>::SharedPtr confidence_publisher_;
   rclcpp::Publisher<std_msgs::msg::String>::SharedPtr state_publisher_;
   rclcpp::Publisher<visualization_msgs::msg::MarkerArray>::SharedPtr marker_publisher_;

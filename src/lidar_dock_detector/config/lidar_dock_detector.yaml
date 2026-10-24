@@ -3,17 +3,22 @@ lidar_dock_detector:
     # ROS interfaces and frames
     scan_topic: /scan                         # LaserScan input used to detect the dock shape
     output_frame: base_link                   # Frame used for scan processing and ROI limits
-    marker_frame: dock_marker                 # TF child frame for the raw detected landmark pose
+    marker_frame: dock_marker                 # TF child frame for a fresh raw landmark measurement
+    dock_frame: dock_contact                  # TF child frame for marker_to_dock_offset
     pose_topic: /detected_dock_pose           # Final dock pose topic consumed by Nav2 docking
     pose_frame: odom                          # Published pose frame; odom avoids base_link-relative drift
+    tracking_frame: odom                      # World-continuous frame for temporal tracking; startup-only
     confidence_topic: /dock_detector/confidence # Confidence score topic for monitoring detection quality
+    raw_marker_pose_topic: /dock_detector/raw_marker_pose # Fresh scan-derived marker poses only
+    raw_dock_pose_topic: /dock_detector/raw_dock_pose # Fresh scan-derived contact poses only
     state_topic: /dock_detector/state         # Detector state topic: IDLE, LOST, CANDIDATE, TRACKING
     marker_topic: /dock_detector/debug_markers # RViz MarkerArray for ROI, lines, candidates, and poses
 
     # Runtime behavior
-    enabled_on_startup: false                # Nav2 starts/stops detection through the toggle service
+    enabled_on_startup: true                 # Jazzy SimpleChargingDock subscribes; it does not call detector services
     publish_debug_markers: true               # Publish RViz markers for visual debugging
     log_pipeline_debug: true                  # Log roi/regions/lines/matches/rejection reasons for tuning
+    publish_tf: false                          # Pose topics are authoritative; opt in to fresh raw TFs for debugging
 
     # Detector control services
     services.start: /dock_detector/start      # Explicit service to enable detection
@@ -87,6 +92,10 @@ lidar_dock_detector:
     # Temporal filter
     temporal.required_consecutive_detections: 2 # Good frames required before stable TRACKING
     temporal.max_missed_frames: 12            # Missed frames allowed before declaring LOST
+    temporal.acquisition_timeout_sec: 0.50    # Strict confirmation hits must fit in this wall-time window
+    temporal.stale_timeout_sec: 0.25          # Track is not usable after this age without a measurement
+    temporal.lost_timeout_sec: 0.75           # Clear track after this age without a measurement
+    temporal.scan_timeout_sec: 0.75           # Declare LOST if scan callbacks stop for this duration
     temporal.max_position_jump: 0.05          # Reject tracking updates that jump farther than this
     temporal.max_yaw_jump_deg: 12.0           # Reject tracking updates with yaw jumps above this
     temporal.smoothing_alpha_position: 0.10   # Position low-pass alpha; lower is steadier but slower

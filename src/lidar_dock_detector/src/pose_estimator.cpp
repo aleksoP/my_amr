@@ -78,13 +78,16 @@ CandidateDebug PoseEstimator::estimate(
       debug.reason = "search_gate_distance";
       return debug;
     }
-    if (std::abs(shortestAngularDistance(prior_dock_pose->yaw, debug.dock_pose.yaw)) > allowed_yaw) {
+    if (std::abs(shortestAngularDistance(prior_dock_pose->yaw,
+        debug.dock_pose.yaw)) > allowed_yaw)
+    {
       debug.reason = "search_gate_yaw";
       return debug;
     }
   }
 
-  const double alignment_confidence = clamp01(1.0 - icp.alignment_error / config_.matching.max_alignment_error);
+  const double alignment_confidence = clamp01(1.0 - icp.alignment_error /
+      config_.matching.max_alignment_error);
   debug.score = 0.5 * candidate.geometric_score + 0.5 * alignment_confidence;
   debug.confidence = clamp01(
     0.40 * candidate.geometric_confidence +
@@ -149,7 +152,8 @@ PoseEstimator::IcpResult PoseEstimator::runIcp(
       return {Pose2D {}, std::numeric_limits<double>::infinity(), 0.0, 0.0};
     }
 
-    const RigidTransform2D updated_transform = composeTransforms(*delta, poseToTransform(current_pose));
+    const RigidTransform2D updated_transform = composeTransforms(*delta,
+        poseToTransform(current_pose));
     current_pose = transformToPose(updated_transform);
     const auto [alignment_error, correspondence_ratio] =
       alignmentStats(transformModel(current_pose), observed_points);
@@ -227,7 +231,9 @@ double PoseEstimator::modelCoverageRatio(
   for (const auto & model_point : transformed_model) {
     bool covered = false;
     for (const auto & observed_point : observed_points) {
-      if ((toEigen(observed_point) - model_point).norm() <= config_.matching.icp_max_correspondence_distance) {
+      if ((toEigen(observed_point) - model_point).norm() <=
+        config_.matching.icp_max_correspondence_distance)
+      {
         covered = true;
         break;
       }
