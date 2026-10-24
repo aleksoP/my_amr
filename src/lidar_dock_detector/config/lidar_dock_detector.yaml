@@ -1,0 +1,95 @@
+lidar_dock_detector:
+  ros__parameters:
+    # ROS interfaces and frames
+    scan_topic: /scan                         # LaserScan input used to detect the dock shape
+    output_frame: base_link                   # Frame used for scan processing and ROI limits
+    marker_frame: dock_marker                 # TF child frame for the raw detected landmark pose
+    pose_topic: /detected_dock_pose           # Final dock pose topic consumed by Nav2 docking
+    pose_frame: odom                          # Published pose frame; odom avoids base_link-relative drift
+    confidence_topic: /dock_detector/confidence # Confidence score topic for monitoring detection quality
+    state_topic: /dock_detector/state         # Detector state topic: IDLE, LOST, CANDIDATE, TRACKING
+    marker_topic: /dock_detector/debug_markers # RViz MarkerArray for ROI, lines, candidates, and poses
+
+    # Runtime behavior
+    enabled_on_startup: false                # Nav2 starts/stops detection through the toggle service
+    publish_debug_markers: true               # Publish RViz markers for visual debugging
+    log_pipeline_debug: true                  # Log roi/regions/lines/matches/rejection reasons for tuning
+
+    # Detector control services
+    services.start: /dock_detector/start      # Explicit service to enable detection
+    services.stop: /dock_detector/stop        # Explicit service to disable detection
+    services.toggle: /dock_detector/toggle_detection # Toggle service for Nav2 detector_service_name
+
+    # Initial pose prior
+    initial_estimate.use: false                # Use rough prior while acquiring or reacquiring the dock
+    initial_estimate.x: 1.20                  # Expected dock x in output_frame during first acquisition
+    initial_estimate.y: 0.00                  # Expected dock y in output_frame during first acquisition
+    initial_estimate.yaw_deg: -135.0           # Expected dock yaw in output_frame during first acquisition
+
+    # Region of interest
+    roi.min_x: 0.20                           # Ignore points closer than this in front of base_link
+    roi.max_x: 1.50                           # Furthest forward x considered for dock detection
+    roi.min_y: -0.25                          # Right-side lateral ROI limit in base_link
+    roi.max_y: 0.25                           # Left-side lateral ROI limit in base_link
+    roi.min_range: 0.05                       # Ignore invalid or too-close scan returns
+    roi.max_range: 1.70                       # Ignore scan returns farther than useful docking range
+
+    # Scan segmentation
+    splitting.point_gap: 0.075                # Gap between adjacent points that starts a new region
+    splitting.min_region_points: 6            # Reject regions with too few scan points
+    splitting.min_region_span: 0.08           # Reject tiny regions likely caused by noise
+    splitting.max_region_span: 0.80           # Reject large merged regions unlikely to be the dock marker
+
+    # Line extraction
+    line_extraction.split_threshold: 0.020    # Split point groups when line fit error exceeds this
+    line_extraction.min_line_points: 3        # Minimum points required to keep an extracted line
+    line_extraction.min_line_length: 0.040    # Minimum physical line length to keep
+    line_extraction.max_fit_error: 0.035      # Reject fitted lines with RMS error above this
+    line_extraction.merge_angle_threshold_deg: 10.0 # Merge neighboring lines if their yaw is this close
+    line_extraction.merge_gap_threshold: 0.035 # Merge neighboring lines separated by less than this gap
+    line_extraction.smoothing_window: 1       # Point smoothing window before line fitting; 1 means minimal smoothing
+    line_extraction.corner_angle_threshold_deg: 30.0 # Minimum angle change treated as a landmark corner
+
+    # Landmark model
+    landmark.total_length: 0.48               # Sum of the modeled marker segment lengths
+    # landmark.segment_lengths: [0.6, 0.10, 0.10, 0.12] # Expected segment lengths of the marker shape
+    # landmark.turn_angles_deg: [45.0, -90.0, 45.0] # Expected turns between consecutive marker segments
+    #landmark.segment_lengths: [0.10, 0.10, 0.12] # Expected segment lengths of the marker shape
+    landmark.segment_lengths: [0.14, 0.10, 0.10, 0.14]
+    landmark.turn_angles_deg: [45.0, -90.0, 45.0] # One turn between each pair of segments
+    landmark.origin_mode: apex                # Marker pose origin mode: start, end, centroid, apex, or vertex
+    landmark.origin_vertex: 0                 # Vertex index used when origin_mode is vertex
+    landmark.forward_axis_deg: -90.0          # Defines marker yaw relative to the model polyline
+    landmark.length_tolerance: 0.06           # Allowed per-segment length error during geometric matching
+    landmark.angle_tolerance_deg: 25.0        # Allowed corner angle error during geometric matching
+    landmark.min_visible_segments: 2          # Minimum matched segments required to accept a candidate
+    landmark.sample_spacing: 0.01             # Spacing used when sampling the model for ICP refinement
+    landmark.marker_to_dock_offset.x: 0.0707  # X offset from detected marker pose to actual dock pose
+    landmark.marker_to_dock_offset.y: 0.0     # Y offset from detected marker pose to actual dock pose
+    landmark.marker_to_dock_offset.yaw_deg: 0.0 # Yaw offset from detected marker pose to actual dock pose
+
+    # Candidate matching and ICP refinement
+    matching.initial_search_radius: 0.75      # Max distance from initial prior while LOST/CANDIDATE
+    matching.initial_yaw_tolerance_deg: 180.0 # Max yaw error from initial prior while LOST/CANDIDATE
+    matching.tracking_search_radius: 0.18     # Max distance from filtered pose while TRACKING
+    matching.tracking_yaw_tolerance_deg: 15.0 # Max yaw error from filtered pose while TRACKING
+    matching.icp_max_correspondence_distance: 0.045 # Max point-to-model distance accepted by ICP
+    matching.icp_max_iterations: 12           # Maximum ICP refinement iterations per candidate
+    matching.max_candidates_per_region: 8     # Limit candidate poses tested per scan region
+    matching.icp_translation_tolerance: 0.002 # ICP stops when translation updates are below this
+    matching.icp_rotation_tolerance_deg: 0.6  # ICP stops when yaw updates are below this
+    matching.max_alignment_error: 0.018       # Reject ICP fits with RMS alignment error above this
+    matching.min_icp_correspondence_ratio: 0.60 # Required ratio of scan points explained by the model
+    matching.min_model_coverage_ratio: 0.55   # Required ratio of model covered by observed scan points
+    matching.min_geometric_score: 0.55        # Minimum shape score before ICP/refinement acceptance
+    matching.min_confidence: 0.60             # Minimum final confidence required to accept a pose
+
+    # Temporal filter
+    temporal.required_consecutive_detections: 2 # Good frames required before stable TRACKING
+    temporal.max_missed_frames: 12            # Missed frames allowed before declaring LOST
+    temporal.max_position_jump: 0.05          # Reject tracking updates that jump farther than this
+    temporal.max_yaw_jump_deg: 12.0           # Reject tracking updates with yaw jumps above this
+    temporal.smoothing_alpha_position: 0.10   # Position low-pass alpha; lower is steadier but slower
+    temporal.smoothing_alpha_yaw: 0.08        # Yaw low-pass alpha; lower is steadier but slower
+    temporal.pending_reacquire_distance: 0.10 # Candidate distance needed to resume from pending state
+    temporal.pending_reacquire_yaw_deg: 10.0  # Candidate yaw closeness needed to resume from pending state

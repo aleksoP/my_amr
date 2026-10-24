@@ -40,7 +40,7 @@
   <joint name="left_wheel_joint" type="continuous">
     <parent link="base_link"/>
     <child link="left_wheel"/>
-    <origin xyz="0.0 0.230 0.0" rpy="1.5708 0 0"/>
+    <origin xyz="0.0 0.274 0.0" rpy="1.5708 0 0"/>
     <!-- Match the right wheel's rotation direction in the base frame. -->
     <axis xyz="0 0 -1"/>
   </joint>
@@ -68,7 +68,7 @@
   <joint name="right_wheel_joint" type="continuous">
     <parent link="base_link"/>
     <child link="right_wheel"/>
-    <origin xyz="0.0 -0.230 0.0" rpy="-1.5708 0 0"/>
+    <origin xyz="0.0 -0.274 0.0" rpy="-1.5708 0 0"/>
     <axis xyz="0 0 1"/>
   </joint>
 
